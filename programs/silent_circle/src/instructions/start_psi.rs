@@ -3,7 +3,7 @@ use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
 use crate::{
-    SilentCircleError, Session, SessionState, COMP_DEF_OFFSET_COMPUTE_PSI, WriteIntersection,
+    SilentCircleError, Session, SessionState, COMP_DEF_OFFSET_COMPUTE_PSI, ComputePsiCallback,
 };
 
 /// Context for the `start_psi` instruction.
@@ -115,7 +115,7 @@ pub fn start_psi(
         ctx.accounts,
         computation_offset,
         args,
-        vec![WriteIntersection::callback_ix(
+        vec![ComputePsiCallback::callback_ix(
             computation_offset,
             &ctx.accounts.mxe_account,
             &[CallbackAccount {

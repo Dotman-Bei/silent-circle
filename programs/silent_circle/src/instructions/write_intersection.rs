@@ -8,13 +8,10 @@ use crate::{
 
 /// Accounts for the Arcium PSI callback.
 ///
-/// `#[callback_accounts("compute_psi")]` injects the standard Arcium callback
-/// accounts (arcium_program, comp_def_account, mxe_account, computation_account,
-/// cluster_account, instructions_sysvar). The `session` account is appended as
-/// the custom writable account passed in `CallbackAccount` during `start_psi`.
+/// Named `ComputePsiCallback` as required by the `#[callback_accounts("compute_psi")]` macro.
 #[callback_accounts("compute_psi")]
 #[derive(Accounts)]
-pub struct WriteIntersection<'info> {
+pub struct ComputePsiCallback<'info> {
     pub arcium_program: Program<'info, Arcium>,
     #[account(address = derive_comp_def_pda!(COMP_DEF_OFFSET_COMPUTE_PSI))]
     pub comp_def_account: Account<'info, ComputationDefinitionAccount>,
@@ -38,7 +35,7 @@ pub struct WriteIntersection<'info> {
 /// u64 is the first 8 bytes of a SHA-256 mint hash held by both wallets.
 /// We expand each fingerprint back to a zero-padded [u8; 32] for storage.
 pub fn write_intersection(
-    ctx: Context<WriteIntersection>,
+    ctx: Context<ComputePsiCallback>,
     output: SignedComputationOutputs<ComputePsiOutput>,
 ) -> Result<()> {
     // Verify the output signature — rejects any result not from the Arcium MXE.

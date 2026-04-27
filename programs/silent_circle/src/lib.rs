@@ -5,7 +5,10 @@ pub mod errors;
 pub mod instructions;
 
 pub use errors::*;
-pub use instructions::*;
+// Account types and instruction helpers are re-exported from the instructions module.
+// Function names are NOT re-exported here to avoid ambiguous glob re-exports with
+// the `#[arcium_program]` macro, which exposes them via the program module.
+pub use instructions::{CommitSet, ComputePsiCallback, CreateSession, InitComputePsiCompDef, StartPsi};
 
 declare_id!("11111111111111111111111111111111");
 
@@ -113,7 +116,7 @@ pub mod silent_circle {
     /// Arcium callback — called by the MXE after PSI completes.
     #[arcium_callback(encrypted_ix = "compute_psi")]
     pub fn write_intersection(
-        ctx: Context<WriteIntersection>,
+        ctx: Context<ComputePsiCallback>,
         output: SignedComputationOutputs<ComputePsiOutput>,
     ) -> Result<()> {
         instructions::write_intersection(ctx, output)

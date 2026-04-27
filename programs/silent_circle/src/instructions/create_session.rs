@@ -11,7 +11,7 @@ pub struct CreateSession<'info> {
         init,
         payer = signer,
         space = SESSION_SPACE,
-        seeds = [b"session", &session_id],
+        seeds = [b"session", session_id.as_ref()],
         bump
     )]
     pub session: Account<'info, Session>,
