@@ -8,7 +8,7 @@ pub use errors::*;
 // Account types and instruction helpers are re-exported from the instructions module.
 // Function names are NOT re-exported here to avoid ambiguous glob re-exports with
 // the `#[arcium_program]` macro, which exposes them via the program module.
-pub use instructions::{CloseSession, CommitSet, ComputePsiCallback, CreateSession, StartPsi};
+pub use instructions::{CloseSession, CommitSet, ComputePsiCallback, ComputePsiOutput, CreateSession, StartPsi};
 
 declare_id!("63CgPfSVhEgg4Gvrq6E8FUbG68awnnmvUai64hqzsgdb");
 
@@ -165,24 +165,6 @@ pub enum SessionState {
 pub struct IntersectionReady {
     pub session: Pubkey,
     pub count: u8,
-}
-
-/// Output type for the `compute_psi` Arcium computation.
-///
-/// Arcium's macro system generates this from the arcis function signature:
-///   `fn compute_psi(...) -> [u64; 4]`
-/// → `ComputePsiOutput { field_0: [u64; 4] }`
-///
-/// Each non-zero u64 in `field_0` is a mint fingerprint (first 8 bytes of
-/// SHA-256) that appears in both wallets' asset sets.
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
-pub struct ComputePsiOutput {
-    pub field_0: [u64; 4],
-}
-
-// [u64; 4] = 4 × 8 bytes = 32 bytes
-impl HasSize for ComputePsiOutput {
-    const SIZE: usize = 32;
 }
 
 // ── One-time setup context ────────────────────────────────────────────────────
