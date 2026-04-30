@@ -179,6 +179,11 @@ pub struct ComputePsiOutput {
     pub field_0: [u64; 4],
 }
 
+// [u64; 4] = 4 × 8 bytes = 32 bytes
+impl HasSize for ComputePsiOutput {
+    const SIZE: usize = 32;
+}
+
 // ── One-time setup context ────────────────────────────────────────────────────
 
 #[init_computation_definition_accounts("compute_psi", payer)]

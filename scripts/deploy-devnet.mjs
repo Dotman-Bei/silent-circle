@@ -123,18 +123,28 @@ const buildRunner = (wslDistro) => {
     };
   }
 
+  // Use -c (not -lc) on Linux to skip login-shell RVM/nvm init scripts that
+  // crash under set -u. PATH is pre-exported below so anchor/solana are found.
+  const toolchainPath = [
+    `${process.env.HOME}/.cargo/bin`,
+    `${process.env.HOME}/.local/share/solana/install/active_release/bin`,
+    `${process.env.HOME}/.avm/bin`,
+    process.env.PATH,
+  ].filter(Boolean).join(":");
+
   return {
     command: "bash",
-    args: ["-lc", buildDeployShellCommand(workspaceRoot)],
+    args: ["-c", buildDeployShellCommand(workspaceRoot)],
     label: "local bash shell",
+    env: { ...process.env, PATH: toolchainPath },
   };
 };
 
-const runCommand = (command, args) => {
+const runCommand = (command, args, env = process.env) => {
   const result = spawnSync(command, args, {
     cwd: workspaceRoot,
     stdio: "inherit",
-    env: process.env,
+    env,
   });
 
   if (result.error) {
@@ -199,7 +209,7 @@ try {
   }
 
   console.log(`Deploying SilentCircle to ${deployCluster} through ${runner.label}...`);
-  runCommand(runner.command, runner.args);
+  runCommand(runner.command, runner.args, runner.env);
 
   const programId = readProgramIdFromKeypair();
   const configureArgs = [

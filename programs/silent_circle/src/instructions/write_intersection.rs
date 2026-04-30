@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
 
 use crate::{
-    IntersectionReady, SilentCircleError, Session, SessionState,
+    IntersectionReady, SilentCircleError, SessionState,
     COMP_DEF_OFFSET_COMPUTE_PSI,
 };
 
