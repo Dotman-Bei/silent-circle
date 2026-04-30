@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
 
-use crate::{SilentCircleError, SessionState, ComputePsiCallback};
+use crate::{SilentCircleError, SessionState, ComputePsiCallback, ID, ID_CONST};
 
 /// Context for the `start_psi` instruction.
 ///

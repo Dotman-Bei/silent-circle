@@ -3,7 +3,7 @@ use arcium_anchor::prelude::*;
 
 use crate::{
     IntersectionReady, SilentCircleError, Session, SessionState,
-    COMP_DEF_OFFSET_COMPUTE_PSI,
+    COMP_DEF_OFFSET_COMPUTE_PSI, ID, ID_CONST,
 };
 
 // The #[callback_accounts] macro internally references `ErrorCode::ClusterNotSet`.
