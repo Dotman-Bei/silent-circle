@@ -17,6 +17,9 @@ dist
 dist-ssr
 *.local
 
+# Anchor / Solana build artifacts (large binaries, do not commit)
+target/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

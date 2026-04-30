@@ -3,11 +3,11 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-silent_circle = "11111111111111111111111111111111"
+silent_circle = "63CgPfSVhEgg4Gvrq6E8FUbG68awnnmvUai64hqzsgdb"
 
 [provider]
 cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "anchor test --provider.cluster devnet"
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

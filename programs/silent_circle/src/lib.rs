@@ -8,9 +8,9 @@ pub use errors::*;
 // Account types and instruction helpers are re-exported from the instructions module.
 // Function names are NOT re-exported here to avoid ambiguous glob re-exports with
 // the `#[arcium_program]` macro, which exposes them via the program module.
-pub use instructions::{CommitSet, ComputePsiCallback, CreateSession, InitComputePsiCompDef, StartPsi};
+pub use instructions::{CloseSession, CommitSet, ComputePsiCallback, CreateSession, InitComputePsiCompDef, StartPsi};
 
-declare_id!("11111111111111111111111111111111");
+declare_id!("63CgPfSVhEgg4Gvrq6E8FUbG68awnnmvUai64hqzsgdb");
 
 /// Byte offset to `encrypted_state` inside the serialised `Session` account
 /// (after the 8-byte Anchor discriminator).
@@ -120,6 +120,12 @@ pub mod silent_circle {
         output: SignedComputationOutputs<ComputePsiOutput>,
     ) -> Result<()> {
         instructions::write_intersection(ctx, output)
+    }
+
+    /// Reclaims the session PDA's rent back to wallet A.
+    /// Only callable once the session is expired or in a terminal state.
+    pub fn close_session(ctx: Context<CloseSession>) -> Result<()> {
+        instructions::close_session(ctx)
     }
 }
 

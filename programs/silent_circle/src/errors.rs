@@ -14,4 +14,8 @@ pub enum SilentCircleError {
     SessionExpired,
     #[msg("Arcium cluster not configured for this MXE account.")]
     ClusterNotSet,
+    #[msg("Only the initiator (wallet A) may close this session.")]
+    UnauthorizedClose,
+    #[msg("Session is still active and has not yet expired.")]
+    SessionStillActive,
 }

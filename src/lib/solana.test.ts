@@ -1,4 +1,5 @@
 import { PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { Buffer } from "buffer";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -67,6 +68,10 @@ describe("solana utilities", () => {
 
     await expect(connectBrowserWallet(provider)).resolves.toBe("8xJmYp5Qm2nZkS6Lq3M4Y5T6n7P8R9sA");
     expect(connect).toHaveBeenCalledWith({ onlyIfTrusted: false });
+    // connectBrowserWallet preemptively calls disconnect to clear any cached
+    // trusted session — reset the spy so the next assertion measures only the
+    // explicit disconnectBrowserWallet call.
+    disconnect.mockClear();
 
     await disconnectBrowserWallet(provider);
     expect(disconnect).toHaveBeenCalledOnce();
@@ -94,7 +99,7 @@ describe("solana utilities", () => {
     const instruction = new TransactionInstruction({
       programId: new PublicKey("11111111111111111111111111111111"),
       keys: [],
-      data: new Uint8Array([1, 2, 3]),
+      data: Buffer.from([1, 2, 3]),
     });
 
     await expect(
@@ -131,7 +136,7 @@ describe("solana utilities", () => {
           new TransactionInstruction({
             programId: new PublicKey("11111111111111111111111111111111"),
             keys: [],
-            data: new Uint8Array(),
+            data: Buffer.alloc(0),
           }),
         ],
         provider: { publicKey: new PublicKey("So11111111111111111111111111111111111111112"), connect: vi.fn() },

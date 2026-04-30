@@ -1,212 +1,206 @@
 # SilentCircle
 
-SilentCircle is a private wallet discovery app for Solana. Two wallets prepare masked asset sets, commit them to a shared session, and aim to reveal only the overlap rather than either full portfolio.
+> Two Solana wallets discover what tokens, NFT collections, and DAO memberships
+> they share — without either side revealing its full portfolio, and without a
+> server in the middle.
 
-This repository now contains two layers of the project:
+SilentCircle is a private mutual wallet-discovery app for Solana. The Anchor
+program runs the session lifecycle, the Vite frontend prepares encrypted
+inputs, and Arcium's MXE network runs the Private Set Intersection (PSI) over
+both wallets' encrypted asset sets. Only the intersection comes back on-chain
+— neither wallet, nor any single Arcium node, ever sees the other's full list.
 
-- A Vite frontend that can connect a wallet, fetch live SPL token mint counts on devnet, generate base58 invite session IDs, compute deterministic commitment previews, and package a structured session payload.
-- A scaffolded Anchor plus Arcium workspace that matches the intended project layout for session accounts and PSI execution, ready to be completed once the Rust and Anchor toolchains are installed locally.
+## What SilentCircle Solves
 
-## Why Arcium Matters
+OTC traders, DAO coalition builders, and token-gated communities all need to
+prove on-chain common ground (a shared SPL token, a shared NFT collection, a
+shared DAO seat) before they coordinate further. The two existing options are
+both bad:
 
-Without MPC, one wallet has to reveal its holdings either to the counterparty or to a server that performs the comparison. SilentCircle is designed so only the intersection should be revealed.
+- **Reveal everything to the counterparty.** Hand over a full portfolio and
+  trust them not to screenshot, mass-mail, or front-run it.
+- **Reveal everything to a server.** Send both portfolios to a "private match"
+  service and trust the operator. That's just centralised custody of metadata.
 
-Arcium's execution model is the missing privacy layer for the final product. The frontend prepares hashed asset identifiers and session commitments, the Anchor program stores session state, and the Arcium computation is intended to run Private Set Intersection over encrypted sets.
+SilentCircle does neither. Each wallet hashes and encrypts its asset set
+client-side under the MXE cluster's X25519 key, commits a short hash to a
+Solana PDA, and Arcium computes the intersection inside a garbled circuit.
+The session PDA receives only the matched fingerprints back via a signed
+callback.
+
+## Why Arcium Is Necessary
+
+Without MPC, *somebody* always sees the full inputs — either the counterparty
+or a centralised matching server. Arcium's MXE network is the missing primitive:
+
+- The PSI circuit ([arcium_compute/src/psi.rs](arcium_compute/src/psi.rs))
+  runs inside a garbled circuit. No single Arcium node — and not Arcium as an
+  operator — ever sees plaintext inputs from either wallet.
+- The MXE returns a signature over the result. The Anchor callback
+  ([programs/silent_circle/src/instructions/write_intersection.rs](programs/silent_circle/src/instructions/write_intersection.rs))
+  verifies that signature against the Arcium cluster account before writing the
+  intersection — so even the program will reject a forged result.
+- Removing Arcium collapses the privacy guarantee. The frontend, hashes, and
+  on-chain commitments are all still there, but the actual matching has to
+  happen *somewhere*, and any "somewhere" without MPC is a leak.
 
 ## Architecture
 
-SilentCircle is split into three layers:
-
-1. Frontend: Vite React app in [src](src) for wallet connection, asset selection, invite links, commitment preview, and session status.
-2. Solana program: Anchor workspace in [programs/silent_circle](programs/silent_circle) for session PDA creation, counterparty commits, PSI start, and callback writes.
-3. Arcium compute: computation crate in [arcium_compute](arcium_compute) for Private Set Intersection over hashed asset identifiers.
-
-Additional architecture notes live in [docs/architecture.md](docs/architecture.md).
-
-## Current Status
-
-Implemented now:
-
-- Base58 session IDs and reusable session helpers.
-- Asset-mask utilities for tokens, NFT collections, and DAO memberships.
-- Shared Solana client utilities backed by `@solana/web3.js`.
-- Live SPL token mint count fetching from Solana devnet.
-- Live NFT collection fetching via token metadata account parsing.
-- Live DAO membership fetching via SPL Governance token-owner records.
-- Deterministic live commitment previews over canonicalized SPL token mint IDs, NFT collection IDs, and DAO realm IDs.
-- Structured session payload generation for future `create_session` instruction calls.
-- Repository scaffolding for Anchor and Arcium crates.
-
-Still incomplete:
-
-- Real encryption with the Arcium SDK.
-- Actual Anchor builds, deployment, and instruction calls.
-- Arcium computation deployment and task orchestration.
-
-## Local Development
-
-### Frontend
-
-Install Node dependencies and run the Vite app:
-
-```bash
-npm install
-npm run dev
+```
+ ┌─────────────────────┐    ┌──────────────────────────┐    ┌─────────────────────┐
+ │  Frontend (Vite)    │    │  Solana program (Anchor) │    │  Arcium MXE network │
+ │                     │    │                          │    │                     │
+ │  • wallet connect   │    │  Session PDA             │    │  PSI garbled circuit│
+ │  • fetch SPL/NFT/   │    │   ├─ wallet_a / wallet_b │    │   ├─ ingests Enc<>  │
+ │    DAO              │    │   ├─ commitment_a/b      │    │   ├─ 4×4 compare    │
+ │  • encrypt set      │──▶ │   ├─ asset_mask, expiry  │ ◀▶ │   ├─ reveals inter- │
+ │    (X25519 + AES-   │    │   └─ intersection: Vec   │    │   │  section only   │
+ │    256-GCM)         │    │                          │    │   └─ signs output   │
+ │  • commit hash      │    │  Instructions            │    │                     │
+ │  • render matches   │    │   create_session         │    │                     │
+ │                     │    │   commit_set             │    │                     │
+ │                     │    │   start_psi  ───CPI────▶ │    │                     │
+ │                     │    │   write_intersection ◀── │ ◀──┤  signed callback    │
+ │                     │    │   close_session (rent)   │    │                     │
+ └─────────────────────┘    └──────────────────────────┘    └─────────────────────┘
 ```
 
-Create a local `.env` from [.env.example](.env.example) if you need to override the Solana RPC URL.
+**Data flow for one session:**
 
-Useful commands:
+1. Wallet A picks an asset mask (tokens / NFT collections / DAOs), the
+   frontend hashes each mint to a 32-byte fingerprint, derives a session PDA
+   under `["session", session_id]`, and calls `create_session` with the
+   commitment.
+2. Wallet A copies the invite link `?/session/<base58_session_id>`.
+3. Wallet B opens the link, picks its own mask, encrypts its set under the
+   MXE cluster X25519 key, and calls `commit_set`.
+4. Either wallet calls `start_psi`, which queues a computation on Arcium's
+   mempool with both encrypted sets as `Enc<Shared>` arguments and registers
+   `write_intersection` as the success callback.
+5. The MXE runs `compute_psi` — a 4×4 fixed-circuit comparison over the two
+   encrypted sets — and returns `[u64; 4]` (up to four matched fingerprints,
+   zero-padded). The result is signed by the cluster.
+6. The Arcium program CPIs back into `write_intersection`. The Anchor program
+   verifies the cluster signature, expands each non-zero fingerprint into a
+   `[u8; 32]`, stores them on the session PDA, and emits `IntersectionReady`.
+7. The frontend (polling the PDA every 3 s) sees the new state, resolves each
+   fingerprint back to a human-readable name (Jupiter token list, Metaplex
+   metadata, SPL Governance realm), and renders the match cards.
 
-```bash
-npm run test
-npm run build
-```
-
-### Anchor and Arcium Workspace
-
-The workspace files are present, but this machine does not currently have `cargo` or `anchor` installed. That means the Rust side has been scaffolded in the repository but not compiled here.
-
-To continue the on-chain build, install at least:
-
-```bash
-# Rust toolchain
-rustup default stable
-
-# Solana CLI
-solana --version
-
-# Anchor CLI
-anchor --version
-```
-
-Once those tools are available, the next expected commands are:
-
-```bash
-anchor build
-anchor test --provider.cluster devnet
-```
-
-### Deploy a Real Devnet Program ID
-
-`Join on-chain` becomes real only after the Anchor program in [programs/silent_circle/src/lib.rs](programs/silent_circle/src/lib.rs) is deployed and the frontend points at that deployed address through `VITE_SILENT_CIRCLE_PROGRAM_ID`.
-
-On Windows, run the Solana and Anchor install commands from WSL2 or another Unix-like shell.
-
-If this machine is missing a usable WSL setup, start with the checked-in bootstrap helpers.
-
-```bash
-npm run setup:wsl:dry-run
-```
-
-Then, from an elevated PowerShell session:
-
-```bash
-npm run setup:wsl
-```
-
-After Windows finishes installing the distro, open that distro once and run:
-
-```bash
-bash /mnt/c/Users/bamig/Documents/VIBE\ CODE/SILENT\ CIRCLE/scripts/bootstrap-devnet-toolchain.sh
-```
-
-1. Install and configure the toolchain.
-
-```bash
-rustup default stable
-sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
-solana config set --url devnet
-solana-keygen new --outfile ~/.config/solana/id.json
-cargo install --git https://github.com/coral-xyz/anchor avm --locked
-avm install latest
-avm use latest
-```
-
-The WSL bootstrap script above performs the same Rust, Solana CLI, and Anchor installation sequence and prints the next repo-local deploy commands when it finishes.
-
-2. Fund the deployer wallet on devnet.
-
-```bash
-solana airdrop 2
-```
-
-3. Preview the deploy wrapper if you want to confirm the runner and paths first.
-
-```bash
-npm run deploy:devnet:dry-run
-```
-
-For optional flags such as `--wsl-distro`, run the Node entrypoint directly on Windows so the argument names are preserved.
-
-4. Run the actual deploy wrapper.
-
-```bash
-npm run deploy:devnet
-```
-
-The wrapper runs `anchor build`, `anchor keys sync`, `anchor build`, and `anchor deploy --provider.cluster devnet`, then reads `target/deploy/silent_circle-keypair.json` and updates `.env.local` through `npm run env:devnet` automatically.
-
-5. If you already have the Arcium IDs, pass them to the wrapper during deploy or rerun the env helper afterward.
-
-```bash
-node scripts/deploy-devnet.mjs \
-	--wsl-distro Ubuntu \
-	--psi-computation-pubkey <your deployed computation pubkey> \
-	--mxe-pubkey <your registered mxe pubkey>
-```
-
-Manual fallback if you already deployed elsewhere and only want to wire the frontend:
-
-```bash
-node scripts/configure-devnet-env.mjs \
-	--program-id <your deployed devnet program id> \
-	--psi-computation-pubkey <your deployed computation pubkey> \
-	--mxe-pubkey <your registered mxe pubkey>
-```
-
-That helper creates or updates `.env.local`, sets `VITE_SILENT_CIRCLE_PROGRAM_ID`, keeps the RPC pointed at devnet by default, and mirrors the same program ID into `ANCHOR_PROGRAM_ID` for local consistency.
-
-If you want to write to a different file during testing, use `--output-env-file tmp/devnet.env`.
-
-6. Restart the frontend.
-
-```bash
-npm run dev
-```
-
-At that point, session creation and join flows can target your deployed Anchor program instead of local-only mode.
-
-Current limitation: `start_psi` is still not end-to-end until the Arcium-side placeholders are replaced with real values as well. The checked-in Rust program still uses a placeholder `ARCIUM_PROGRAM_ID`, and `.env.example` still carries placeholder `PSI_COMPUTATION_PUBKEY` and `ARCIUM_MXE_PUBKEY` values.
-
-## Environment Variables
-
-The checked-in example file is [.env.example](.env.example).
-
-Current variables:
-
-- `VITE_SOLANA_RPC_URL`: frontend Solana RPC endpoint.
-- `VITE_SILENT_CIRCLE_PROGRAM_ID`: deployed SilentCircle program ID used by the browser to switch from local join flow to on-chain join flow.
-- `ANCHOR_PROGRAM_ID`: intended Anchor program ID.
-- `PSI_COMPUTATION_PUBKEY`: intended Arcium computation public key.
-- `ARCIUM_MXE_PUBKEY`: intended Arcium MXE public key.
+More detail and account-layout notes live in
+[docs/architecture.md](docs/architecture.md).
 
 ## Repo Layout
 
 ```text
 .
-├── src/                     # Vite frontend
-├── programs/silent_circle/  # Anchor program scaffold
-├── arcium_compute/          # Arcium computation scaffold
-├── docs/                    # Architecture notes
-├── tests/                   # Placeholder Anchor integration test location
+├── src/                                   # Vite + React frontend
+│   ├── lib/                               # asset fetching, encryption, on-chain client
+│   ├── hooks/use-arcium-cluster.ts        # MXE cluster X25519 key fetch
+│   └── pages/Index.tsx                    # session console (3 screens in one)
+├── programs/silent_circle/src/            # Anchor program (Rust)
+│   ├── lib.rs                             # state, IDs, comp_def setup
+│   └── instructions/                      # create / commit / start / callback / close
+├── arcium_compute/src/psi.rs              # MXE compute_psi circuit
+├── tests/silent_circle.ts                 # Anchor mocha integration tests
+├── scripts/                               # devnet bootstrap + deploy wrappers
+├── docs/architecture.md                   # diagrams + data-flow notes
 ├── Anchor.toml
 ├── Cargo.toml
 └── .env.example
 ```
 
-## Next Steps
+## How to Run Locally
 
-1. Wire the frontend session draft into real Anchor instruction clients.
-2. Install Rust, Solana, and Anchor locally, then complete the on-chain build and Arcium integration.
-3. Reduce the remaining large browser chunks created by Solana and metadata client code paths.
+### 1. Frontend only (no on-chain calls)
+
+```bash
+npm install
+cp .env.example .env       # default RPC + program ID are already devnet-friendly
+npm run dev
+```
+
+Useful subcommands:
+
+```bash
+npm run test               # vitest unit tests for the frontend
+npm run build              # production bundle
+```
+
+### 2. Full on-chain stack (Anchor + Arcium devnet)
+
+Prerequisites — Solana CLI 1.18+, Anchor 0.32+, Arcium CLI. On Windows install
+inside WSL2; the bootstrap script handles it:
+
+```bash
+npm run setup:wsl:dry-run  # preview
+npm run setup:wsl          # actually install (elevated PowerShell)
+bash /mnt/c/Users/bamig/Documents/VIBE\ CODE/SILENT\ CIRCLE/scripts/bootstrap-devnet-toolchain.sh
+```
+
+Then deploy:
+
+```bash
+solana airdrop 2                           # fund the deploy keypair
+npm run deploy:devnet:dry-run              # preview the deploy wrapper
+npm run deploy:devnet                      # anchor build + keys sync + deploy
+```
+
+The deploy wrapper updates `.env.local` with the deployed program ID. To wire
+in Arcium IDs after `arcium register-mxe` and `arcium register-computation`:
+
+```bash
+node scripts/configure-devnet-env.mjs \
+  --program-id <deployed devnet program id> \
+  --psi-computation-pubkey <computation pubkey> \
+  --mxe-pubkey <mxe pubkey>
+```
+
+Restart the frontend with `npm run dev` and the Solana session-creation,
+counterparty-join, and PSI-start flows now target the live program.
+
+### 3. Anchor integration tests
+
+After `anchor build` generates the IDL:
+
+```bash
+anchor test --provider.cluster devnet      # or `localnet` against a local validator
+```
+
+The suite covers `create_session`, `commit_set` (happy path + double-join +
+expired-session rejection), `write_intersection` (rejects non-Arcium callers),
+and `close_session` (requires expiry + initiator authority + rent refund).
+
+## Environment Variables
+
+`.env.example` is the reference. Only `VITE_*` vars reach the browser.
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `VITE_SOLANA_RPC_URL` | frontend | Solana RPC endpoint (default: devnet) |
+| `VITE_SILENT_CIRCLE_PROGRAM_ID` | frontend | Switches the join flow from local-only to on-chain |
+| `VITE_ARCIUM_*` | frontend | MXE / mempool / cluster / comp-def addresses |
+| `VITE_ARCIUM_CLUSTER_X25519_PUBKEY_HEX` | frontend | Optional 64-char hex of the cluster's X25519 key — skips an RPC call on every `start_psi` |
+| `ANCHOR_PROGRAM_ID` | scripts | Mirrored devnet program ID for Anchor tooling |
+| `PSI_COMPUTATION_PUBKEY` / `ARCIUM_MXE_PUBKEY` | scripts | Arcium IDs consumed by `configure-devnet-env.mjs` |
+
+## Status
+
+Implemented:
+
+- Vite frontend with wallet connect, asset selection, live SPL token / NFT
+  collection / DAO membership fetching, deterministic commitment preview,
+  session PDA polling, and intersection match resolution.
+- Anchor program with `create_session`, `commit_set`, `start_psi`,
+  `write_intersection` (Arcium callback), and `close_session` (rent reclaim).
+- Client-side X25519 + HKDF + AES-256-GCM encryption of asset fingerprints.
+- Arcium `compute_psi` garbled-circuit definition (4-element fixed PSI).
+- Mocha integration tests covering all five instructions.
+- WSL bootstrap + devnet deploy + env-wiring scripts.
+- Dialect deep-link from the Match Result for post-match coordination.
+
+Out of scope for the RTG submission (extension ideas):
+
+- Multi-round PSI with refined masks.
+- ZK proof-of-membership tokens for matched assets.
+- Full SPL Governance "shared seat" attestations.

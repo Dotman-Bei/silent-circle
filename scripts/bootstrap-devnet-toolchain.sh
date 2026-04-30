@@ -54,6 +54,15 @@ if ! command -v anchor >/dev/null 2>&1; then
   append_line_if_missing "$SHELL_RC_FILE" 'export PATH="$HOME/.avm/bin:$PATH"'
 fi
 
+if ! command -v arcium >/dev/null 2>&1; then
+  log "Installing Arcium CLI (per SKILL §2)."
+  if ! cargo install arcium-cli 2>/dev/null; then
+    log "Note: 'cargo install arcium-cli' failed. The Arcium CLI may have moved off crates.io."
+    log "Check https://docs.arcium.com for the current install command (e.g. via npm or a release binary)."
+    log "The deploy can still proceed; you only need the Arcium CLI for register-mxe / register-computation."
+  fi
+fi
+
 log "Configuring Solana for devnet."
 solana config set --url devnet
 

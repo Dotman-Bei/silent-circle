@@ -438,7 +438,7 @@ const Index = () => {
       sessionAccount
         ? selectionFromAssetMask(sessionAccount.assetMask)
             .map((asset) => assetCatalog.find((item) => item.value === asset)?.label)
-            .filter((label): label is string => Boolean(label))
+            .filter((label): label is (typeof assetCatalog)[number]["label"] => Boolean(label))
         : [],
     [sessionAccount],
   );
@@ -1168,6 +1168,35 @@ const Index = () => {
     appendEvent("Wallet disconnected", "Session controls returned to standby.", "counterparty", "warn");
   };
 
+  // The "other" wallet in the session — what the Dialect deep-link should target.
+  const dialectCounterparty = useMemo(() => {
+    if (!sessionAccount) {
+      return counterpartyAddress && counterpartyAddress !== walletAddress ? counterpartyAddress : null;
+    }
+    if (walletAddress === sessionAccount.walletA) {
+      return sessionAccount.walletB;
+    }
+    if (walletAddress === sessionAccount.walletB) {
+      return sessionAccount.walletA;
+    }
+    // Observer with no wallet match — default to wallet B, then A.
+    return sessionAccount.walletB ?? sessionAccount.walletA;
+  }, [counterpartyAddress, sessionAccount, walletAddress]);
+
+  const openDialectThread = useCallback(() => {
+    if (!dialectCounterparty) {
+      toast.error("No counterparty to message", {
+        description: "Wait for the second wallet to commit before opening a Dialect thread.",
+      });
+      appendEvent("Dialect link unavailable", "No counterparty wallet is known yet.", phases[phase].key, "warn");
+      return;
+    }
+    // Dialect's universal wallet-to-wallet thread URL.
+    const url = `https://dialect.to/?wallet=${dialectCounterparty}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    appendEvent("Dialect thread opened", `Opened a Dialect chat with ${formatWalletAddress(dialectCounterparty)}.`, phases[phase].key, "info");
+  }, [appendEvent, dialectCounterparty, phase]);
+
   const copyToClipboard = async (value: string, label: string) => {
     if (!value.trim()) {
       toast.error(`${label} is not ready`, {
@@ -1642,8 +1671,9 @@ const Index = () => {
                 )}
               </div>
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <Button variant="secure" className="flex-1">
-                  <MessageCircle className="size-4" /> Message on Dialect
+                <Button variant="secure" className="flex-1" onClick={openDialectThread} disabled={!dialectCounterparty}>
+                  <MessageCircle className="size-4" />
+                  {dialectCounterparty ? "Message on Dialect" : "Message on Dialect (no counterparty)"}
                 </Button>
                 <Button variant="glass" className="flex-1" onClick={() => copyToClipboard(sessionRequest, "Session request")} disabled={!activeSessionPlan}>
                   <Copy className="size-4" /> Copy session request

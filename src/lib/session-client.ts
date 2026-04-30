@@ -1,4 +1,5 @@
 import { PublicKey, SystemProgram, TransactionInstruction } from "@solana/web3.js";
+import { Buffer } from "buffer";
 
 import {
   arciumClockAccount,
@@ -197,7 +198,7 @@ export const createSessionInstruction = async (sessionDraft: SessionDraft, signe
       { pubkey: sessionPda, isSigner: false, isWritable: true },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
-    data: instructionData,
+    data: Buffer.from(instructionData),
   });
 };
 
@@ -211,7 +212,7 @@ export const createCommitSetInstruction = async ({ sessionId, signer, commitment
       { pubkey: new PublicKey(signer), isSigner: true, isWritable: true },
       { pubkey: sessionPda, isSigner: false, isWritable: true },
     ],
-    data: instructionData,
+    data: Buffer.from(instructionData),
   });
 };
 
@@ -240,7 +241,7 @@ export const createStartPsiInstruction = async (params: StartPsiParams, programI
       { pubkey: SystemProgram.programId,  isSigner: false, isWritable: false }, // system_program
       { pubkey: arciumProgramId,          isSigner: false, isWritable: false }, // arcium_program
     ],
-    data: instructionData,
+    data: Buffer.from(instructionData),
   });
 };
 

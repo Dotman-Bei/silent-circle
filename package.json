@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:anchor": "anchor test --provider.cluster devnet"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -76,7 +77,11 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
     "@eslint/js": "^9.32.0",
+    "@types/chai": "^4.3.20",
+    "@types/mocha": "^10.0.10",
+    "chai": "^4.5.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
@@ -91,6 +96,8 @@
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
     "lovable-tagger": "^1.1.13",
+    "mocha": "^10.8.2",
+    "ts-mocha": "^10.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",

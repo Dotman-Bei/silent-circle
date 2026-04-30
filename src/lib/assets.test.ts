@@ -112,7 +112,7 @@ describe("asset utilities", () => {
       }),
     };
 
-    await expect(fetchAssetCounts("11111111111111111111111111111111", connection)).resolves.toEqual({
+    await expect(fetchAssetCounts("11111111111111111111111111111111", connection as never)).resolves.toEqual({
       tokens: 2,
       nfts: 0,
       daos: 0,

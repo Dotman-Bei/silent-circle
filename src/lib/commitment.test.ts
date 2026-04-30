@@ -15,6 +15,7 @@ const baseSnapshot: AssetSnapshot = {
   tokenMints: [createAssetId(2), createAssetId(1)],
   nftCollections: [createAssetId(4), createAssetId(3)],
   daoMemberships: [createAssetId(6), createAssetId(5)],
+  labelsByAssetId: {},
 };
 
 describe("commitment utilities", () => {

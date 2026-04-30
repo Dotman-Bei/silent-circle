@@ -114,7 +114,8 @@ const fetchMetadataLabels = async (connection: Pick<Connection, "getMultipleAcco
 
   const metadataAddresses = uniqueAssetIds.map(buildMetadataAddress);
   const metadataAccounts = await connection.getMultipleAccountsInfo(metadataAddresses);
-  const { Metadata } = await import("@metaplex-foundation/mpl-token-metadata");
+  const { getMetadataAccountDataSerializer } = await import("@metaplex-foundation/mpl-token-metadata");
+  const serializer = getMetadataAccountDataSerializer();
 
   return uniqueAssetIds.reduce<AssetLabels>((labels, assetId, index) => {
     const account = metadataAccounts[index];
@@ -124,8 +125,8 @@ const fetchMetadataLabels = async (connection: Pick<Connection, "getMultipleAcco
     }
 
     try {
-      const [metadata] = Metadata.deserialize(account.data as Buffer);
-      const name = normalizeMetadataName((metadata as { name?: string; data?: { name?: string } }).name ?? metadata.data?.name);
+      const [metadata] = serializer.deserialize(new Uint8Array(account.data));
+      const name = normalizeMetadataName(metadata.name);
 
       if (name) {
         labels[assetId] = name;
@@ -227,7 +228,9 @@ const findNftsByOwnerWithMetadata: FindNftsByOwner = async (connection, owner) =
   );
 
   const metadataAccounts = await connection.getMultipleAccountsInfo(metadataAddresses);
-  const { Metadata } = await import("@metaplex-foundation/mpl-token-metadata");
+  const { getMetadataAccountDataSerializer } = await import("@metaplex-foundation/mpl-token-metadata");
+  const { unwrapOption } = await import("@metaplex-foundation/umi");
+  const serializer = getMetadataAccountDataSerializer();
 
   return metadataAccounts.flatMap((account) => {
     if (!account) {
@@ -235,17 +238,18 @@ const findNftsByOwnerWithMetadata: FindNftsByOwner = async (connection, owner) =
     }
 
     try {
-      const [metadata] = Metadata.deserialize(account.data as Buffer);
+      const [metadata] = serializer.deserialize(new Uint8Array(account.data));
+      const collection = unwrapOption(metadata.collection);
 
-      if (!metadata.collection) {
+      if (!collection) {
         return [];
       }
 
       return [
         {
           collection: {
-            address: metadata.collection.key,
-            verified: metadata.collection.verified,
+            address: collection.key,
+            verified: collection.verified,
           },
         },
       ];
@@ -307,7 +311,7 @@ export const fetchDaoMemberships = async (
 
 export const fetchAssetCounts = async (
   walletAddress: string,
-  connection: Pick<Connection, "getParsedTokenAccountsByOwner"> = solanaConnection,
+  connection: Connection = solanaConnection,
 ): Promise<AssetCounts> => {
   const snapshot = await fetchAssetSnapshot(walletAddress, connection);
 
