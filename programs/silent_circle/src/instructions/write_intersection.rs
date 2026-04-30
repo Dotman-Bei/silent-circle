@@ -51,6 +51,7 @@ pub fn write_intersection(
         Err(_) => return err!(SilentCircleError::InvalidState),
     };
 
+    let session_key = ctx.accounts.session.key();
     let s = &mut ctx.accounts.session;
 
     // Convert each non-zero u64 fingerprint to a 32-byte hash representation.
@@ -66,11 +67,9 @@ pub fn write_intersection(
         .collect();
 
     s.state = SessionState::Done;
+    let count = s.intersection.len() as u8;
 
-    emit!(IntersectionReady {
-        session: ctx.accounts.session.key(),
-        count: s.intersection.len() as u8,
-    });
+    emit!(IntersectionReady { session: session_key, count });
 
     Ok(())
 }

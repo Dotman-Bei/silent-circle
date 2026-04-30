@@ -6,9 +6,13 @@ pub mod instructions;
 
 pub use errors::*;
 // Account types and instruction helpers are re-exported from the instructions module.
-// Function names are NOT re-exported here to avoid ambiguous glob re-exports with
-// the `#[arcium_program]` macro, which exposes them via the program module.
-pub use instructions::{CloseSession, CommitSet, ComputePsiCallback, ComputePsiOutput, CreateSession, StartPsi};
+// The `#[arcium_program]` macro looks up the auto-generated `__client_accounts_*`
+// modules at the crate root, so we glob-re-export each instruction submodule here.
+pub use instructions::close_session::*;
+pub use instructions::commit_set::*;
+pub use instructions::create_session::*;
+pub use instructions::start_psi::*;
+pub use instructions::write_intersection::*;
 
 declare_id!("63CgPfSVhEgg4Gvrq6E8FUbG68awnnmvUai64hqzsgdb");
 
