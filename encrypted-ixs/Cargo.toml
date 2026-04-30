@@ -1,0 +1,11 @@
+[package]
+name = "encrypted-ixs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "encrypted_ixs"
+path = "compute_psi.rs"
+
+[dependencies]
+arcis = { workspace = true }

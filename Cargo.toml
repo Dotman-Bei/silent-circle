@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/silent_circle", "arcium_compute"]
+members = ["programs/silent_circle", "arcium_compute", "encrypted-ixs"]
 resolver = "2"
 
 [workspace.package]
