@@ -19,5 +19,4 @@ anchor-debug = []
 [dependencies]
 anchor-lang = { workspace = true }
 arcium-anchor = { workspace = true }
-arcium-client = { workspace = true }
 arcium-macros = { workspace = true }
