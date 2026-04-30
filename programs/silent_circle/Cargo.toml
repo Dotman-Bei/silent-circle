@@ -20,3 +20,4 @@ anchor-debug = []
 anchor-lang = { workspace = true }
 arcium-anchor = { workspace = true }
 arcium-macros = { workspace = true }
+arcium-client = { workspace = true }  # required by arcium proc macros at compile time
