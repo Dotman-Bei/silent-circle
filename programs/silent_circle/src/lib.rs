@@ -5,12 +5,18 @@ pub mod errors;
 pub mod instructions;
 
 pub use errors::*;
-// Re-export Accounts context structs so callers and the arcium_program macro can
-// reference them.  Function names are NOT re-exported — the #[arcium_program] macro
-// re-exposes them in the program module and a second export would be ambiguous.
-// The auto-generated __client_accounts_* modules are pub(crate), accessible to the
-// macro without an explicit re-export.
+// Public re-exports for external callers.
 pub use instructions::{CloseSession, CommitSet, ComputePsiCallback, ComputePsiOutput, CreateSession, StartPsi};
+// The #[arcium_program] macro generates code that references crate::__client_accounts_*
+// at the crate root. These modules are pub(crate) so we use pub(crate) use here —
+// pub use would fail (E0365) because you can't widen a pub(crate) item to pub.
+pub(crate) use instructions::{
+    __client_accounts_close_session,
+    __client_accounts_commit_set,
+    __client_accounts_compute_psi_callback,
+    __client_accounts_create_session,
+    __client_accounts_start_psi,
+};
 
 declare_id!("63CgPfSVhEgg4Gvrq6E8FUbG68awnnmvUai64hqzsgdb");
 
