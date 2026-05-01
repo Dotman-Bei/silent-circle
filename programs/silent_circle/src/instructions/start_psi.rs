@@ -58,40 +58,45 @@ pub struct StartPsi<'info> {
 pub fn start_psi(
     ctx: Context<StartPsi>,
     computation_offset: u64,
-    // Wallet A's encrypted asset fingerprints (Enc<Shared, SetA>)
-    set_a_items: [[u8; 32]; 4], // 4 encrypted u64 ciphertexts
-    set_a_count: [u8; 32],      // encrypted u8 ciphertext
-    set_a_pubkey: [u8; 32],     // X25519 public key used for Enc<Shared>
-    set_a_nonce: u128,          // nonce
-    // Wallet B's encrypted asset fingerprints (Enc<Shared, SetB>)
+    set_a_items: [[u8; 32]; 4],
+    set_a_count: [u8; 32],
+    set_a_pubkey: [u8; 32],
+    set_a_nonce: u128,
     set_b_items: [[u8; 32]; 4],
     set_b_count: [u8; 32],
     set_b_pubkey: [u8; 32],
     set_b_nonce: u128,
 ) -> Result<()> {
-    let s = &mut ctx.accounts.session;
+    // Validate using immutable access — mutable borrow comes later.
     require!(
-        s.state == SessionState::BothCommitted,
+        ctx.accounts.session.state == SessionState::BothCommitted,
         SilentCircleError::InvalidState
     );
     require!(
-        Clock::get()?.unix_timestamp <= s.expires_at,
+        Clock::get()?.unix_timestamp <= ctx.accounts.session.expires_at,
         SilentCircleError::SessionExpired
     );
 
     let signer = ctx.accounts.signer.key();
     require!(
-        signer == s.wallet_a || signer == s.wallet_b,
+        signer == ctx.accounts.session.wallet_a || signer == ctx.accounts.session.wallet_b,
         SilentCircleError::UnauthorizedStart
     );
 
     ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
 
-    // Build the ArgumentList for the Arcium MXE:
-    //   Enc<Shared, SetA>  →  x25519_pubkey + nonce + 4×encrypted_u64 + encrypted_u8
-    //   Enc<Shared, SetB>  →  same layout
+    // Capture values needed from accounts before queue_computation borrows ctx.accounts.
+    let session_key = ctx.accounts.session.key();
+    let callback_ixs = vec![ComputePsiCallback::callback_ix(
+        computation_offset,
+        &ctx.accounts.mxe_account,
+        &[CallbackAccount {
+            pubkey: session_key,
+            is_writable: true,
+        }],
+    )?];
+
     let args = ArgBuilder::new()
-        // — Wallet A's set —
         .x25519_pubkey(set_a_pubkey)
         .plaintext_u128(set_a_nonce)
         .encrypted_u64(set_a_items[0])
@@ -99,7 +104,6 @@ pub fn start_psi(
         .encrypted_u64(set_a_items[2])
         .encrypted_u64(set_a_items[3])
         .encrypted_u8(set_a_count)
-        // — Wallet B's set —
         .x25519_pubkey(set_b_pubkey)
         .plaintext_u128(set_b_nonce)
         .encrypted_u64(set_b_items[0])
@@ -109,26 +113,17 @@ pub fn start_psi(
         .encrypted_u8(set_b_count)
         .build();
 
-    // Queue the PSI computation on the Arcium network.
-    // The MXE will decrypt both sets in the garbled circuit, compute the
-    // intersection, and invoke `write_intersection` as the success callback.
     queue_computation(
         ctx.accounts,
         computation_offset,
         args,
-        vec![ComputePsiCallback::callback_ix(
-            computation_offset,
-            &ctx.accounts.mxe_account,
-            &[CallbackAccount {
-                pubkey: ctx.accounts.session.key(),
-                is_writable: true,
-            }],
-        )?],
-        1, // num_signers
-        0, // extra_compute_budget
+        callback_ixs,
+        1,
+        0,
     )?;
 
-    s.arcium_task_id = computation_offset;
-    s.state = SessionState::Computing;
+    // Mutable borrow of session only after queue_computation releases ctx.accounts.
+    ctx.accounts.session.arcium_task_id = computation_offset;
+    ctx.accounts.session.state = SessionState::Computing;
     Ok(())
 }
