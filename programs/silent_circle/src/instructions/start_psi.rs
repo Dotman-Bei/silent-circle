@@ -1,7 +1,11 @@
 use anchor_lang::prelude::*;
-use arcium_anchor::prelude::*;
+use arcium_anchor::{prelude::*, ArciumSignerAccount};
+use arcium_client::idl::arcium::types::CallbackAccount;
 
-use crate::{SilentCircleError, SessionState, ComputePsiCallback, ID, ID_CONST};
+use crate::{
+    SilentCircleError, Session, SessionState, ComputePsiCallback,
+    COMP_DEF_OFFSET_COMPUTE_PSI, ID, ID_CONST,
+};
 
 /// Context for the `start_psi` instruction.
 ///
