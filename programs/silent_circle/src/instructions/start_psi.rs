@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
-use arcium_anchor::{prelude::*, ArciumSignerAccount};
+use arcium_anchor::prelude::*;
 use arcium_client::idl::arcium::types::CallbackAccount;
 
 use crate::{
-    SilentCircleError, Session, SessionState, ComputePsiCallback,
+    ArciumSignerAccount, SilentCircleError, Session, SessionState, ComputePsiCallback,
     COMP_DEF_OFFSET_COMPUTE_PSI, ID, ID_CONST,
 };
 
