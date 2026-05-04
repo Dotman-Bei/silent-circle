@@ -160,11 +160,25 @@ export const connectBrowserWallet = async (provider = getBrowserSolanaProvider()
     throw new Error("No Solana wallet provider found.");
   }
 
-  // Always disconnect first to clear any cached trusted session so the wallet
-  // extension always presents its approval popup, even for the same wallet/browser.
-  await provider.disconnect?.().catch(() => undefined);
-  const response = await provider.connect({ onlyIfTrusted: false });
-  return response.publicKey.toString();
+  // Solflare sets provider.publicKey directly and sometimes returns undefined from
+  // connect(); other wallets (Phantom) return { publicKey }. We handle both.
+  // Don't disconnect before connecting — Solflare cancels the popup if we do.
+  const response = await provider.connect({ onlyIfTrusted: false }).catch((err: unknown) => {
+    // Re-throw with a clear message so the catch in connectWallet can surface it.
+    const msg = err instanceof Error ? err.message : "Connection rejected";
+    throw new Error(msg);
+  });
+
+  const pubkey =
+    response?.publicKey?.toString() ??
+    provider.publicKey?.toString() ??
+    null;
+
+  if (!pubkey) {
+    throw new Error("Wallet connected but returned no public key.");
+  }
+
+  return pubkey;
 };
 
 export const disconnectBrowserWallet = async (provider = getBrowserSolanaProvider()) => {

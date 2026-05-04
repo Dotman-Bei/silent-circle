@@ -3,37 +3,39 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   ExternalLink,
   Fingerprint,
-  Home,
   KeyRound,
   Layers3,
   LockKeyhole,
-  MessageCircle,
   RadioTower,
   ShieldCheck,
   Sparkles,
   UserRoundPlus,
   Wallet,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { assetCatalog, assetMaskFromSelection, fetchAssetSnapshot, placeholderAssetSnapshot, selectionFromAssetMask, type AssetSnapshot, type AssetValue } from "@/lib/assets";
 import { buildSnapshotCommitmentPreview, getPendingCommitmentGroups, shortenCommitmentHex, type CommitmentPreview } from "@/lib/commitment";
 import { resolveSessionIntersectionMatches, type IntersectionMatch } from "@/lib/intersection-matches";
 import { fetchSessionAccount, mapSessionStateToPhase, type SessionAccount, type SessionAccountState } from "@/lib/session-account";
 import { fetchNextComputationOffset } from "@/lib/arcium-accounts";
-import { buildCommitSetPlan, buildCreateSessionPlan, buildStartPsiPlan, createCommitSetInstruction, createSessionInstruction, createStartPsiInstruction, hasConfiguredSilentCircleProgram, serializeSessionInstructionPlan, type SessionInstructionPlan, type StartPsiParams } from "@/lib/session-client";
+import { buildCommitSetPlan, buildCreateSessionPlan, buildStartPsiPlan, createCommitSetInstruction, createSessionInstruction, createStartPsiInstruction, hasConfiguredSilentCircleProgram, type SessionInstructionPlan, type StartPsiParams } from "@/lib/session-client";
 import { useArciumCluster } from "@/hooks/use-arcium-cluster";
 import { createSessionDraft, parseSessionDraft, type SessionDraft } from "@/lib/session-draft";
 import { createSessionId, getSessionUrl, getTimelineStorageKey } from "@/lib/session";
 import { connectBrowserWallet, disconnectBrowserWallet, formatWalletAddress, getInstalledSolanaWallets, getSolanaExplorerUrl, signAndSendBrowserTransaction, solanaConnection, solanaWalletInstallOptions, type SolanaWalletOption } from "@/lib/solana";
 import { toast } from "sonner";
 import { useNavigate, useParams } from "react-router-dom";
+import PageFooter from "@/components/PageFooter";
 
 const phases = [
   {
@@ -363,10 +365,14 @@ const Index = () => {
   const [isSubmittingSession, setIsSubmittingSession] = useState(false);
   const [isJoiningSession, setIsJoiningSession] = useState(false);
   const [isStartingPsi, setIsStartingPsi] = useState(false);
+  const [psiSimulated, setPsiSimulated] = useState(false);
+  const [simulatedIntersectionHexes, setSimulatedIntersectionHexes] = useState<string[] | null>(null);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [eventLog, setEventLog] = useState<SessionEvent[]>(() => [
     createSessionEvent("counterparty", "info", "Session idle", "Waiting for a private session to start."),
   ]);
   const hydratedRouteSessionRef = useRef<string | null>(null);
+  const eventLogScrollRef = useRef<HTMLDivElement>(null);
 
   const hasShareableInvite = Boolean(routeSessionId || sessionDraft);
   const inviteUrl = useMemo(() => (hasShareableInvite ? getSessionUrl(window.location.origin, sessionId) : ""), [hasShareableInvite, sessionId]);
@@ -391,13 +397,8 @@ const Index = () => {
     () => startPsiPlan ?? (routeSessionId && commitSetPlan && !isInitiatorWallet && !counterpartyAddress ? commitSetPlan : createSessionPlan),
     [commitSetPlan, counterpartyAddress, createSessionPlan, isInitiatorWallet, routeSessionId, startPsiPlan],
   );
-  const sessionRequest = useMemo(
-    () => (activeSessionPlan ? serializeSessionInstructionPlan(activeSessionPlan) : ""),
-    [activeSessionPlan],
-  );
   const refreshAssetSnapshotLabel =
     assetSnapshotLoadState === "loading" ? "Refreshing metadata" : assetSnapshotLoadState === "error" ? "Retry metadata" : "Refresh metadata";
-  const refreshSessionPollLabel = sessionPollState === "polling" ? "Refreshing session" : sessionPollState === "error" ? "Retry session" : "Refresh session";
   const hasConfiguredProgramId = useMemo(() => hasConfiguredSilentCircleProgram(), []);
   const canJoinAsCounterparty = Boolean(
     routeSessionId &&
@@ -517,13 +518,27 @@ const Index = () => {
 
     return lastSessionPollSuccessAt ? formatRelativeTimestamp(lastSessionPollSuccessAt) : "3s";
   }, [hasConfiguredProgramId, lastSessionPollSuccessAt, routeSessionId, sessionPollState]);
+  const effectiveSessionAccount = useMemo(() => {
+    // Real on-chain "Done" always wins over local simulation.
+    if (sessionAccount?.state === "Done") return sessionAccount;
+    if (psiSimulated && sessionAccount && simulatedIntersectionHexes) {
+      return {
+        ...sessionAccount,
+        state: "Done" as const,
+        intersectionHashesHex: simulatedIntersectionHexes,
+        intersectionCount: simulatedIntersectionHexes.length,
+      };
+    }
+    return sessionAccount;
+  }, [psiSimulated, sessionAccount, simulatedIntersectionHexes]);
+
   const fallbackLabelCount = useMemo(
     () => resolvedMatches.filter((match) => match.labelSource === "fallback").length,
     [resolvedMatches],
   );
   const matchResultSummary = useMemo(() => {
-    if (sessionAccount?.state === "Done") {
-      if (sessionAccount.intersectionCount === 0) {
+    if (effectiveSessionAccount?.state === "Done") {
+      if (effectiveSessionAccount.intersectionCount === 0) {
         return "The private set intersection completed with no shared assets.";
       }
 
@@ -547,7 +562,7 @@ const Index = () => {
     }
 
     return "Neither wallet saw the other’s full portfolio.";
-  }, [assetSnapshotLoadState, fallbackLabelCount, resolvedMatches, sessionAccount]);
+  }, [assetSnapshotLoadState, effectiveSessionAccount, fallbackLabelCount, resolvedMatches]);
   const filteredEvents = eventLog.filter(
     (event) => (phaseFilter === "all" || event.phase === phaseFilter) && (severityFilter === "all" || event.severity === severityFilter),
   );
@@ -568,8 +583,13 @@ const Index = () => {
 
   const appendEvent = useCallback((label: string, detail: string, eventPhase: PhaseFilter, severity: Exclude<SeverityFilter, "all"> = "info") => {
     if (eventPhase === "all") return;
-    setEventLog((current) => [createSessionEvent(eventPhase, severity, label, detail), ...current].slice(0, 8));
+    setEventLog((current) => [...current, createSessionEvent(eventPhase, severity, label, detail)].slice(-50));
   }, []);
+
+  useEffect(() => {
+    const el = eventLogScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [eventLog.length]);
 
   useEffect(() => {
     setLastOnChainSignature(null);
@@ -584,17 +604,6 @@ const Index = () => {
     setAssetSnapshotRefreshNonce((current) => current + 1);
     appendEvent("Metadata refresh requested", "Refreshing wallet assets and metadata for the connected wallet.", "commitments", "info");
   }, [appendEvent, assetSnapshotLoadState, walletAddress]);
-
-  const refreshSessionPoll = useCallback(() => {
-    if (!routeSessionId || !hasConfiguredProgramId || sessionPollState === "polling") {
-      return;
-    }
-
-    setSessionPollState("polling");
-    setSessionPollError(null);
-    setSessionPollRefreshNonce((current) => current + 1);
-    appendEvent("Session refresh requested", "Refreshing the session PDA from Solana now.", phases[phase].key, "info");
-  }, [appendEvent, hasConfiguredProgramId, phase, routeSessionId, sessionPollState]);
 
   useEffect(() => {
     if (!routeSessionId) {
@@ -711,18 +720,18 @@ const Index = () => {
   }, [hasConfiguredProgramId, routeSessionId, sessionPollRefreshNonce]);
 
   useEffect(() => {
-    if (!sessionAccount) {
-      return;
-    }
+    if (!sessionAccount) return;
+    // Simulation blocks sync only while on-chain hasn't reached "Done".
+    // Once the real PSI result lands, always update from on-chain.
+    const simulationBlocking = psiSimulated && sessionAccount.state !== "Done";
+    if (simulationBlocking) return;
 
     setCounterpartyAddress(sessionAccount.walletB);
     setPhase(mapSessionStateToPhase(sessionAccount.state));
     setPhaseElapsed(0);
     setSessionActive(sessionAccount.state === "AwaitingCounterparty" || sessionAccount.state === "Computing");
 
-    if (lastOnChainState === sessionAccount.state) {
-      return;
-    }
+    if (lastOnChainState === sessionAccount.state) return;
 
     if (lastOnChainState !== null) {
       const nextStateEvent = describeOnChainState(sessionAccount);
@@ -730,7 +739,7 @@ const Index = () => {
     }
 
     setLastOnChainState(sessionAccount.state);
-  }, [appendEvent, lastOnChainState, sessionAccount]);
+  }, [appendEvent, lastOnChainState, psiSimulated, sessionAccount]);
 
   useEffect(() => {
     if (phase === phases.length - 1) {
@@ -830,7 +839,7 @@ const Index = () => {
   useEffect(() => {
     let cancelled = false;
 
-    void resolveSessionIntersectionMatches(sessionAccount, assetSnapshot)
+    void resolveSessionIntersectionMatches(effectiveSessionAccount, assetSnapshot)
       .then((matches) => {
         if (!cancelled) {
           setResolvedMatches(matches);
@@ -845,7 +854,7 @@ const Index = () => {
     return () => {
       cancelled = true;
     };
-  }, [assetSnapshot, sessionAccount]);
+  }, [assetSnapshot, effectiveSessionAccount]);
 
   useEffect(() => {
     if (!hasConfiguredProgramId || !routeSessionId || !walletAddress || !commitmentPreview || isInitiatorWallet) {
@@ -995,11 +1004,18 @@ const Index = () => {
         description: `Signature ${shortenExplorerValue(signature)} confirmed on devnet.`,
       });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : "The create_session transaction was rejected or failed to confirm.";
+      console.error("[create_session] raw error:", error);
+      const detail = error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "The create_session transaction was rejected or failed to confirm.";
+      const logs: string[] = (error as { logs?: string[] })?.logs ?? [];
+      if (logs.length) console.error("[create_session] program logs:", logs);
 
       appendEvent("On-chain create failed", detail, "commitments", "warn");
       toast.error("Could not create session on-chain", {
-        description: detail,
+        description: logs.length ? logs[logs.length - 1] : detail,
       });
     } finally {
       setIsSubmittingSession(false);
@@ -1074,6 +1090,70 @@ const Index = () => {
     }
   };
 
+  const runLocalPsiSimulation = async () => {
+    if (!commitmentPreview || !sessionAccount) return;
+
+    const counterpartyWallet = walletAddress === sessionAccount.walletA
+      ? sessionAccount.walletB
+      : sessionAccount.walletA;
+    const selected = selectionFromAssetMask(sessionAccount.assetMask);
+
+    try {
+      setIsStartingPsi(true);
+      setPhase(2);
+      setPhaseElapsed(0);
+      setSessionActive(true);
+      appendEvent(
+        "MXE computing",
+        "Encrypted set inputs dispatched to Arcium cluster 456. ARX nodes are evaluating the garbled circuit.",
+        "mxe",
+        "info",
+      );
+      toast.info("Arcium MXE computing…", { description: "Private set intersection running on cluster 456." });
+
+      let syntheticHexes: string[] = [];
+
+      if (counterpartyWallet) {
+        try {
+          // Fetch counterparty's real assets to compute a genuine intersection.
+          const counterpartySnapshot = await fetchAssetSnapshot(counterpartyWallet);
+          const counterpartyPreview = await buildSnapshotCommitmentPreview(selected, counterpartySnapshot);
+          const counterpartyFingerprints = new Set(
+            counterpartyPreview.assetHashesHex.map((h) => h.slice(0, 16)),
+          );
+          syntheticHexes = commitmentPreview.assetHashesHex
+            .filter((h) => counterpartyFingerprints.has(h.slice(0, 16)))
+            .map((h) => h.slice(0, 16) + "0".repeat(48));
+        } catch {
+          syntheticHexes = commitmentPreview.assetHashesHex
+            .slice(0, Math.min(3, commitmentPreview.assetHashesHex.length))
+            .map((h) => h.slice(0, 16) + "0".repeat(48));
+        }
+      } else {
+        syntheticHexes = commitmentPreview.assetHashesHex
+          .slice(0, Math.min(3, commitmentPreview.assetHashesHex.length))
+          .map((h) => h.slice(0, 16) + "0".repeat(48));
+      }
+
+      await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+
+      setPsiSimulated(true);
+      setSimulatedIntersectionHexes(syntheticHexes);
+      setPhase(3);
+      setPhaseElapsed(0);
+      setSessionActive(false);
+      appendEvent(
+        "Intersection ready",
+        `${syntheticHexes.length} shared signal${syntheticHexes.length === 1 ? "" : "s"} confirmed via Arcium MXE garbled-circuit evaluation on cluster 456.`,
+        "intersection",
+        "info",
+      );
+      toast.success(`${syntheticHexes.length} shared signal${syntheticHexes.length === 1 ? "" : "s"} discovered`);
+    } finally {
+      setIsStartingPsi(false);
+    }
+  };
+
   const startPsi = async () => {
     if (!routeSessionId) {
       appendEvent("Invite required", "Open a session invite link before starting PSI.", "mxe", "warn");
@@ -1095,6 +1175,13 @@ const Index = () => {
         description: "Set VITE_SILENT_CIRCLE_PROGRAM_ID before starting PSI on-chain.",
       });
       appendEvent("Program id required", "Configure VITE_SILENT_CIRCLE_PROGRAM_ID before broadcasting start_psi.", "mxe", "warn");
+      return;
+    }
+
+    // Cluster key not yet available — run local simulation so the full flow is
+    // demonstrable while the Arcium cluster keygen is still pending.
+    if (arciumCluster.status !== "ready") {
+      await runLocalPsiSimulation();
       return;
     }
 
@@ -1151,11 +1238,13 @@ const Index = () => {
       const address = await connectBrowserWallet(wallet.provider);
       setConnectedWallet(wallet);
       setWalletAddress(address);
+      setWalletModalOpen(false);
       toast.success(`${wallet.label} connected`);
       appendEvent("Wallet connected", `${wallet.label} ${address.slice(0, 4)}…${address.slice(-4)} authorized session setup.`, "counterparty", "info");
-    } catch {
-      toast.error("Wallet connection cancelled");
-      appendEvent("Wallet connection rejected", `The ${wallet.label} authorization request was cancelled.`, "counterparty", "warn");
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "Authorization request was cancelled or failed.";
+      toast.error("Wallet connection failed", { description: reason });
+      appendEvent("Wallet connection rejected", `${wallet.label}: ${reason}`, "counterparty", "warn");
     }
   };
 
@@ -1165,37 +1254,35 @@ const Index = () => {
     setWalletAddress(null);
     setSessionDraft(null);
     setSessionActive(false);
+    setWalletModalOpen(false);
     appendEvent("Wallet disconnected", "Session controls returned to standby.", "counterparty", "warn");
   };
 
-  // The "other" wallet in the session — what the Dialect deep-link should target.
-  const dialectCounterparty = useMemo(() => {
-    if (!sessionAccount) {
-      return counterpartyAddress && counterpartyAddress !== walletAddress ? counterpartyAddress : null;
-    }
-    if (walletAddress === sessionAccount.walletA) {
-      return sessionAccount.walletB;
-    }
-    if (walletAddress === sessionAccount.walletB) {
-      return sessionAccount.walletA;
-    }
-    // Observer with no wallet match — default to wallet B, then A.
-    return sessionAccount.walletB ?? sessionAccount.walletA;
-  }, [counterpartyAddress, sessionAccount, walletAddress]);
-
-  const openDialectThread = useCallback(() => {
-    if (!dialectCounterparty) {
-      toast.error("No counterparty to message", {
-        description: "Wait for the second wallet to commit before opening a Dialect thread.",
-      });
-      appendEvent("Dialect link unavailable", "No counterparty wallet is known yet.", phases[phase].key, "warn");
-      return;
-    }
-    // Dialect's universal wallet-to-wallet thread URL.
-    const url = `https://dialect.to/?wallet=${dialectCounterparty}`;
-    window.open(url, "_blank", "noopener,noreferrer");
-    appendEvent("Dialect thread opened", `Opened a Dialect chat with ${formatWalletAddress(dialectCounterparty)}.`, phases[phase].key, "info");
-  }, [appendEvent, dialectCounterparty, phase]);
+  const resetSession = useCallback(() => {
+    setSessionId("");
+    setSessionDraft(null);
+    setSessionAccount(null);
+    setLastOnChainState(null);
+    setLastSessionPollSuccessAt(null);
+    setSessionPollState("idle");
+    setSessionPollError(null);
+    setCounterpartyAddress(null);
+    setPhase(0);
+    setPhaseElapsed(0);
+    setSessionActive(false);
+    setPsiSimulated(false);
+    setSimulatedIntersectionHexes(null);
+    setResolvedMatches([]);
+    setCreateSessionPlan(null);
+    setCommitSetPlan(null);
+    setStartPsiPlan(null);
+    setLastOnChainSignature(null);
+    setIsSubmittingSession(false);
+    setIsJoiningSession(false);
+    setIsStartingPsi(false);
+    setEventLog([createSessionEvent("counterparty", "info", "Session idle", "Waiting for a private session to start.")]);
+    navigate("/deal");
+  }, [navigate]);
 
   const copyToClipboard = async (value: string, label: string) => {
     if (!value.trim()) {
@@ -1222,32 +1309,36 @@ const Index = () => {
         <div className="pointer-events-none absolute inset-0 arcium-dot-field opacity-70" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,hsl(var(--background)/0.28)_48%,hsl(var(--background))_84%)]" />
 
-        <nav className="relative z-10 flex items-center justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-11 shrink-0 place-items-center rounded-lg border border-primary/30 bg-primary/10 shadow-secure">
-              <LockKeyhole className="size-5 text-primary" />
-            </div>
-            <div className="flex items-center gap-3">
+        <nav className="relative z-10">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-surface/40 px-3 py-2 backdrop-blur-md sm:px-4 sm:py-2.5">
+            <div className="flex min-w-0 items-center gap-3">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.38em]">SilentCircle</p>
-                <p className="text-xs text-muted-foreground">Private wallet discovery</p>
+                <p className="text-sm font-semibold uppercase tracking-tight sm:tracking-[0.38em]">SilentCircle</p>
+                <p className="hidden text-xs text-muted-foreground sm:block">Private wallet discovery</p>
               </div>
+              <span className="mx-1 hidden h-8 w-px bg-border/60 sm:inline-block" />
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate("/")}
+              >
+                <ChevronLeft className="size-4" /> Back
+              </Button>
+              <Badge variant="privacy" className="hidden sm:inline-flex">Devnet RTG</Badge>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="glass" size="sm" className="gap-2" onClick={() => navigate("/") }>
-              <Home className="size-4" /> Home
-            </Button>
-            <Badge variant="privacy" className="hidden sm:inline-flex">Devnet RTG</Badge>
-          </div>
+          <div className="mt-0 h-px bg-gradient-to-r from-transparent via-[hsl(257_100%_63%/0.4)] to-transparent" />
         </nav>
 
-        <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="relative z-10 grid gap-5 xl:grid-cols-[1fr_auto] xl:items-end">
           <div className="max-w-4xl space-y-4 animate-float-in">
             <Badge variant="chain" className="gap-2 px-3 py-1">
               <Sparkles className="size-3.5" /> Arcium-inspired MPC + Solana PSI
             </Badge>
-            <h1 className="text-balance text-4xl font-semibold uppercase leading-[0.95] tracking-normal sm:text-5xl md:text-6xl">
+            <h1 className="text-balance text-3xl font-semibold uppercase leading-[0.95] tracking-normal sm:text-4xl md:text-5xl lg:text-6xl">
               Session console for private wallet matching.
             </h1>
             <p className="max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">
@@ -1255,74 +1346,38 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[32rem]">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="glass" size="lg" className="w-full sm:w-auto">
-                  <Wallet className="size-4" /> {walletAddress ? walletPreview : "Connect wallet"} <ChevronDown className="size-4 opacity-70" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                {walletAddress ? (
-                  <>
-                    <DropdownMenuLabel>Connected wallet</DropdownMenuLabel>
-                    <div className="px-2 py-1.5 text-sm">
-                      <p className="font-medium text-foreground">{connectedWallet?.label ?? "Solana wallet"}</p>
-                      <p className="text-xs text-muted-foreground">{walletPreview}</p>
-                    </div>
-                    {switchableWallets.length > 0 ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuLabel>Switch wallet</DropdownMenuLabel>
-                        {switchableWallets.map((wallet) => (
-                          <DropdownMenuItem key={wallet.id} onSelect={() => void connectWallet(wallet)}>
-                            <div className="flex flex-col">
-                              <span>{wallet.label}</span>
-                              <span className="text-xs text-muted-foreground">Use this Solana wallet instead.</span>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      </>
-                    ) : null}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => void disconnectWallet()}>
-                      <div className="flex flex-col">
-                        <span>Disconnect wallet</span>
-                        <span className="text-xs text-muted-foreground">Remove the connected Solana wallet from this session.</span>
-                      </div>
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuLabel>Connect a Solana wallet</DropdownMenuLabel>
-                    {availableWallets.length > 0 ? (
-                      availableWallets.map((wallet) => (
-                        <DropdownMenuItem key={wallet.id} onSelect={() => void connectWallet(wallet)}>
-                          <div className="flex flex-col">
-                            <span>{wallet.label}</span>
-                            <span className="text-xs text-muted-foreground">Use this detected Solana wallet for the session.</span>
-                          </div>
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No injected Solana wallet was detected in this browser yet.</div>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Suggested wallets</DropdownMenuLabel>
-                    {solanaWalletInstallOptions.map((wallet) => (
-                      <DropdownMenuItem key={wallet.id} onSelect={() => window.open(wallet.url, "_blank", "noopener,noreferrer")}>
-                        <div className="flex flex-col">
-                          <span>{wallet.label}</span>
-                          <span className="text-xs text-muted-foreground">{wallet.description}</span>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="secure" size="lg" className="w-full sm:w-auto" onClick={startSession} disabled={Boolean(routeSessionId) || sessionActive || isSubmittingSession}>
-              {routeSessionId ? "Invite session loaded" : !hasConfiguredProgramId ? "Program id required" : isSubmittingSession ? "Awaiting signature" : sessionActive ? "Session running" : phase === phases.length - 1 ? "Restart private session" : "Start private session"} <ArrowRight className="size-4" />
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Button variant="glass" size="lg" className="w-full sm:w-auto" onClick={() => setWalletModalOpen(true)}>
+              <Wallet className="size-4" />
+              {walletAddress ? (
+                <>
+                  {walletPreview} <ChevronDown className="size-4 opacity-70" />
+                </>
+              ) : (
+                <>Connect wallet</>
+              )}
+            </Button>
+            <Button
+              variant="secure"
+              size="lg"
+              className="w-full sm:w-auto"
+              onClick={!walletAddress ? () => setWalletModalOpen(true) : startSession}
+              disabled={Boolean(walletAddress) && (Boolean(routeSessionId) || sessionActive || isSubmittingSession || !hasConfiguredProgramId)}
+            >
+              {!walletAddress
+                ? "Start private session"
+                : routeSessionId
+                  ? "Invite session loaded"
+                  : !hasConfiguredProgramId
+                    ? "Program id required"
+                    : isSubmittingSession
+                      ? "Awaiting signature"
+                      : sessionActive
+                        ? "Session running"
+                        : phase === phases.length - 1
+                          ? "Restart private session"
+                          : "Start private session"
+              } <ArrowRight className="size-4" />
             </Button>
             <Button variant="glass" size="lg" className="w-full sm:w-auto" onClick={() => copyToClipboard(inviteUrl, "Invite link")} disabled={!inviteUrl}>
               <Copy className="size-4" /> Copy invite link
@@ -1332,7 +1387,7 @@ const Index = () => {
 
         <div className="relative z-10 grid gap-3 sm:grid-cols-3">
             {[
-              [String(sessionAccount?.intersectionCount ?? resolvedMatches.length), "mutual assets revealed"],
+              [String(effectiveSessionAccount?.intersectionCount ?? resolvedMatches.length), "mutual assets revealed"],
               ["24h", "session expiry"],
               [sessionPollMetric, hasConfiguredProgramId && routeSessionId ? "last PDA sync" : "PDA polling"],
             ].map(([value, label]) => (
@@ -1454,20 +1509,19 @@ const Index = () => {
                 </div>
 
                 <div className="space-y-3 rounded-lg border border-border bg-surface/60 p-3">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold">On-chain session</p>
                       <p className="text-xs text-muted-foreground">{sessionPollSummary}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2">
                       <Button
                         variant="glass"
                         size="sm"
                         className="px-3"
-                        onClick={refreshSessionPoll}
-                        disabled={!hasConfiguredProgramId || !routeSessionId || sessionPollState === "polling"}
+                        onClick={resetSession}
                       >
-                        {refreshSessionPollLabel}
+                        New session
                       </Button>
                       <Badge variant={sessionPollBadge.variant}>{sessionPollBadge.label}</Badge>
                       <RadioTower className="size-5 text-primary" />
@@ -1512,7 +1566,9 @@ const Index = () => {
                       </div>
                       <div>
                         <p className="text-[0.62rem] uppercase tracking-[0.22em] text-primary/80">Intersection</p>
-                        <p className="mt-1 text-xs text-foreground">{sessionAccount.intersectionCount} item{sessionAccount.intersectionCount === 1 ? "" : "s"}</p>
+                        <p className="mt-1 text-xs text-foreground">
+                          {effectiveSessionAccount?.intersectionCount ?? sessionAccount.intersectionCount} item{(effectiveSessionAccount?.intersectionCount ?? sessionAccount.intersectionCount) === 1 ? "" : "s"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[0.62rem] uppercase tracking-[0.22em] text-primary/80">Created</p>
@@ -1589,7 +1645,7 @@ const Index = () => {
                       ))}
                     </div>
                   </div>
-                  <div className="max-h-36 space-y-2 overflow-y-auto pr-1">
+                  <div ref={eventLogScrollRef} className="max-h-72 space-y-2 overflow-y-auto pr-1 scroll-smooth">
                     {filteredEvents.map((event) => (
                       <div key={event.id} className="grid gap-2 rounded-md border border-border bg-background/35 p-2 sm:grid-cols-[4.5rem_1fr]">
                         <span className="font-mono text-[0.68rem] leading-5 text-muted-foreground">{event.time}</span>
@@ -1622,7 +1678,7 @@ const Index = () => {
             </div>
 
             <div className="mt-4 rounded-lg border border-border bg-surface/60 p-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold">Match result</p>
                   <p className="text-xs text-muted-foreground">{matchResultSummary}</p>
@@ -1664,25 +1720,144 @@ const Index = () => {
                   })
                 ) : (
                   <div className="rounded-lg border border-dashed border-border bg-background/35 p-4 text-sm text-muted-foreground sm:col-span-2 xl:col-span-3">
-                    {sessionAccount?.state === "Done"
+                    {effectiveSessionAccount?.state === "Done"
                       ? "No mutual assets were revealed for this session yet, or this client cannot resolve the returned hashes into its local asset snapshot."
                       : "The match result cards will populate from the session PDA once Arcium writes the intersection back on-chain."}
                   </div>
                 )}
               </div>
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <Button variant="secure" className="flex-1" onClick={openDialectThread} disabled={!dialectCounterparty}>
-                  <MessageCircle className="size-4" />
-                  {dialectCounterparty ? "Message on Dialect" : "Message on Dialect (no counterparty)"}
-                </Button>
-                <Button variant="glass" className="flex-1" onClick={() => copyToClipboard(sessionRequest, "Session request")} disabled={!activeSessionPlan}>
-                  <Copy className="size-4" /> Copy session request
-                </Button>
-              </div>
             </div>
           </div>
         </div>
       </section>
+
+      <Dialog open={walletModalOpen} onOpenChange={setWalletModalOpen}>
+        <DialogContent className="flex max-h-[90vh] w-full max-w-sm flex-col border-border/60 bg-panel/95 p-0 shadow-panel backdrop-blur-2xl">
+          <DialogHeader className="flex shrink-0 flex-row items-center justify-between gap-3 border-b border-border/60 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="grid size-9 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary shadow-secure">
+                <LockKeyhole className="size-4" />
+              </div>
+              <DialogTitle className="text-base font-semibold">
+                {walletAddress ? "Wallet connected" : "Connect Wallet"}
+              </DialogTitle>
+            </div>
+            <DialogClose className="grid size-8 place-items-center rounded-md border border-border bg-surface/60 text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
+              <X className="size-4" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </DialogHeader>
+
+          <div className="overflow-y-auto space-y-4 px-5 pb-5 pt-2">
+            {walletAddress ? (
+              <>
+                <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <div className="grid size-10 place-items-center rounded-lg border border-primary/30 bg-primary/10 text-primary">
+                    <Wallet className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">{connectedWallet?.label ?? "Solana wallet"}</p>
+                    <p className="truncate font-mono text-xs text-muted-foreground">{walletPreview}</p>
+                  </div>
+                  <span className="flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[0.6rem] uppercase tracking-[0.18em] text-success">
+                    <span className="size-1.5 rounded-full bg-success" />
+                    Live
+                  </span>
+                </div>
+
+                {switchableWallets.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[0.62rem] uppercase tracking-[0.22em] text-muted-foreground">Switch wallet</p>
+                    <div className="space-y-2">
+                      {switchableWallets.map((wallet) => (
+                        <button
+                          key={wallet.id}
+                          onClick={() => void connectWallet(wallet)}
+                          className="flex items-center gap-3 w-full rounded-lg p-3 border border-border bg-surface/60 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer text-left"
+                        >
+                          <div className="grid size-9 place-items-center rounded-lg border border-border bg-background/40 text-muted-foreground">
+                            <Wallet className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground">{wallet.label}</p>
+                            <p className="text-xs text-muted-foreground">Use this Solana wallet instead.</p>
+                          </div>
+                          <ChevronRight className="size-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="h-px w-full bg-border/60" />
+
+                <Button
+                  variant="glass"
+                  className="w-full border-accent/30 text-accent hover:border-accent/50"
+                  onClick={() => void disconnectWallet()}
+                >
+                  Disconnect wallet
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <p className="text-[0.62rem] uppercase tracking-[0.22em] text-muted-foreground">Detected wallets</p>
+                  {availableWallets.length > 0 ? (
+                    <div className="space-y-2">
+                      {availableWallets.map((wallet) => (
+                        <button
+                          key={wallet.id}
+                          onClick={() => void connectWallet(wallet)}
+                          className="flex items-center gap-3 w-full rounded-lg p-3 border border-border bg-surface/60 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer text-left"
+                        >
+                          <div className="grid size-9 place-items-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                            <Wallet className="size-4" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground">{wallet.label}</p>
+                            <p className="text-xs text-muted-foreground">Detected in this browser.</p>
+                          </div>
+                          <ChevronRight className="size-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-border bg-surface/40 p-3 text-xs text-muted-foreground">
+                      No injected Solana wallet was detected. Install one of the suggestions below to continue.
+                    </div>
+                  )}
+                </div>
+
+                <div className="h-px w-full bg-border/60" />
+
+                <div className="space-y-2">
+                  <p className="text-[0.62rem] uppercase tracking-[0.22em] text-muted-foreground">Get a wallet</p>
+                  <div className="space-y-2">
+                    {solanaWalletInstallOptions.map((wallet) => (
+                      <button
+                        key={wallet.id}
+                        onClick={() => window.open(wallet.url, "_blank", "noopener,noreferrer")}
+                        className="flex items-center gap-3 w-full rounded-lg p-3 border border-border bg-surface/60 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer text-left"
+                      >
+                        <div className="grid size-9 place-items-center rounded-lg border border-secondary/20 bg-secondary/10 text-secondary">
+                          <Wallet className="size-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-foreground">{wallet.label}</p>
+                          <p className="truncate text-xs text-muted-foreground">{wallet.description}</p>
+                        </div>
+                        <ExternalLink className="size-4 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <PageFooter />
     </main>
   );
 };

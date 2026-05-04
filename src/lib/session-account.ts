@@ -3,7 +3,7 @@ import { PublicKey, type Connection } from "@solana/web3.js";
 import { deriveSessionPda, getSilentCircleProgramId } from "@/lib/session-client";
 import { solanaConnection } from "@/lib/solana";
 
-const SESSION_DISCRIMINATOR = new Uint8Array([213, 62, 101, 203, 86, 104, 98, 172]);
+const SESSION_DISCRIMINATOR = new Uint8Array([243, 81, 72, 115, 214, 188, 72, 144]);
 const EMPTY_PUBLIC_KEY = "11111111111111111111111111111111";
 
 type SessionConnectionLike = Pick<Connection, "getAccountInfo">;

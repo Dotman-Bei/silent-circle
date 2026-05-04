@@ -18,7 +18,7 @@ pub(crate) use instructions::{
     __client_accounts_start_psi,
 };
 
-declare_id!("2zrcqoTBEvu35EN4sv64vXTqqynNM4m8Q7xK5cdzJvKk");
+declare_id!("EBohpNnouLq47eK3a3G58bPNdvKaJEjDMHap8u3aavmq");
 
 /// Byte offset to `encrypted_state` inside the serialised `Session` account
 /// (after the 8-byte Anchor discriminator).

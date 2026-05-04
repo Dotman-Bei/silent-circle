@@ -128,6 +128,23 @@ All colors MUST be HSL.
   }
 }
 
+@keyframes sweep-h {
+  0%   { background-position: -60% center; }
+  100% { background-position: 160% center; }
+}
+@keyframes sweep-left {
+  0%   { background-position: 160% center; }
+  100% { background-position: -60% center; }
+}
+@keyframes sweep-v {
+  0%   { background-position: center -60%; }
+  100% { background-position: center 160%; }
+}
+@keyframes sweep-up {
+  0%   { background-position: center 160%; }
+  100% { background-position: center -60%; }
+}
+
 @layer utilities {
   .bg-hero {
     background: var(--gradient-hero);

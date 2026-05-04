@@ -1,0 +1,45 @@
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="f-bg" cx="40%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#1e0b40"/>
+      <stop offset="100%" stop-color="#0a0615"/>
+    </radialGradient>
+    <linearGradient id="f-brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="f-ring-a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#e879f9"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="f-ring-b" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#4c1d95"/>
+    </linearGradient>
+    <radialGradient id="f-node-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#f0abfc" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background disc -->
+  <circle cx="32" cy="32" r="31" fill="url(#f-bg)"/>
+  <circle cx="32" cy="32" r="31" stroke="url(#f-brand)" stroke-width="1.2" stroke-opacity="0.5"/>
+
+  <!-- Party A circle — soft fill -->
+  <circle cx="23" cy="32" r="13.5" fill="#7c3aed" fill-opacity="0.18"/>
+  <!-- Party B circle — soft fill -->
+  <circle cx="41" cy="32" r="13.5" fill="#5b21b6" fill-opacity="0.18"/>
+
+  <!-- Party A ring -->
+  <circle cx="23" cy="32" r="13.5" stroke="url(#f-ring-a)" stroke-width="1.8" stroke-opacity="0.9"/>
+  <!-- Party B ring -->
+  <circle cx="41" cy="32" r="13.5" stroke="url(#f-ring-b)" stroke-width="1.8" stroke-opacity="0.9"/>
+
+  <!-- Intersection glow halo -->
+  <circle cx="32" cy="32" r="7" fill="url(#f-node-glow)"/>
+
+  <!-- Center intersection node -->
+  <circle cx="32" cy="32" r="3.5" fill="#a855f7" fill-opacity="0.55"/>
+  <circle cx="32" cy="32" r="2" fill="white" fill-opacity="0.95"/>
+</svg>

@@ -1,0 +1,76 @@
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SilentCircle">
+  <defs>
+    <linearGradient id="sc-brand" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="60%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#5b21b6"/>
+    </linearGradient>
+    <linearGradient id="sc-shield-fill" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#4c1d95" stop-opacity="0.12"/>
+    </linearGradient>
+    <filter id="sc-glow-lock" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="sc-ambient" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <!-- Outer decorative rings -->
+  <circle cx="100" cy="100" r="95" stroke="url(#sc-brand)" stroke-width="1" stroke-opacity="0.35"/>
+  <circle cx="100" cy="100" r="86" stroke="url(#sc-brand)" stroke-width="0.5" stroke-opacity="0.15"/>
+
+  <!-- Background ambient glow -->
+  <circle cx="100" cy="100" r="68" fill="#6d28d9" fill-opacity="0.08" filter="url(#sc-ambient)"/>
+
+  <!-- Shield glow (behind) -->
+  <path d="M100 38 L138 56 L138 98 C138 122 122 140 100 152 C78 140 62 122 62 98 L62 56 Z"
+    fill="#7c3aed" fill-opacity="0.18" filter="url(#sc-ambient)"/>
+
+  <!-- Main shield -->
+  <path d="M100 38 L138 56 L138 98 C138 122 122 140 100 152 C78 140 62 122 62 98 L62 56 Z"
+    fill="url(#sc-shield-fill)"
+    stroke="url(#sc-brand)"
+    stroke-width="2"
+    stroke-linejoin="round"/>
+
+  <!-- Inner shield highlight -->
+  <path d="M100 46 L130 62 L130 96 C130 116 118 130 100 142"
+    fill="none"
+    stroke="white"
+    stroke-width="0.8"
+    stroke-opacity="0.18"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+
+  <!-- Lock shackle -->
+  <path d="M88 102 V92 A12 12 0 0 1 112 92 V102"
+    stroke="white"
+    stroke-width="3.5"
+    stroke-linecap="round"
+    fill="none"
+    filter="url(#sc-glow-lock)"/>
+
+  <!-- Lock body -->
+  <rect x="83" y="102" width="34" height="25" rx="5.5"
+    fill="white" fill-opacity="0.96"/>
+
+  <!-- Keyhole -->
+  <circle cx="100" cy="113" r="5" fill="#4c1d95"/>
+  <rect x="97.8" y="113" width="4.4" height="8" rx="1.5" fill="#4c1d95"/>
+
+  <!-- Network nodes -->
+  <circle cx="32"  cy="80" r="3"   fill="#a855f7" fill-opacity="0.5"/>
+  <circle cx="24"  cy="80" r="1.8" fill="#a855f7" fill-opacity="0.3"/>
+  <circle cx="168" cy="80" r="3"   fill="#8b5cf6" fill-opacity="0.5"/>
+  <circle cx="176" cy="80" r="1.8" fill="#8b5cf6" fill-opacity="0.3"/>
+  <circle cx="100" cy="22" r="3"   fill="#c084fc" fill-opacity="0.55"/>
+  <circle cx="100" cy="14" r="1.8" fill="#c084fc" fill-opacity="0.3"/>
+
+  <!-- Connector lines to shield -->
+  <line x1="35"  y1="80" x2="62"  y2="76" stroke="#8b5cf6" stroke-width="0.8" stroke-opacity="0.35"/>
+  <line x1="165" y1="80" x2="138" y2="76" stroke="#8b5cf6" stroke-width="0.8" stroke-opacity="0.35"/>
+  <line x1="100" y1="25" x2="100" y2="38" stroke="#a855f7" stroke-width="0.8" stroke-opacity="0.3"/>
+</svg>
