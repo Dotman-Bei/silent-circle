@@ -20,6 +20,10 @@ dist-ssr
 # Anchor / Solana build artifacts (large binaries, do not commit)
 target/
 
+# Local devnet test wallets and token lists — contain private keys, not for production
+scripts/test-payer.json
+scripts/test-tokens.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

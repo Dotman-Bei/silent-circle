@@ -378,7 +378,7 @@ const Index = () => {
   const inviteUrl = useMemo(() => (hasShareableInvite ? getSessionUrl(window.location.origin, sessionId) : ""), [hasShareableInvite, sessionId]);
   const assetMask = useMemo(() => assetMaskFromSelection(selected), [selected]);
   const pendingCommitmentGroups = useMemo(() => getPendingCommitmentGroups(selected), [selected]);
-  const availableWallets = useMemo(() => getInstalledSolanaWallets(), [walletAddress]);
+  const availableWallets = useMemo(() => getInstalledSolanaWallets(), []);
   const switchableWallets = useMemo(
     () => availableWallets.filter((wallet) => wallet.id !== connectedWallet?.id),
     [availableWallets, connectedWallet?.id],
