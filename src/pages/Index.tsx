@@ -1500,11 +1500,22 @@ const Index = () => {
                 </div>
 
                 <div className="space-y-3 rounded-lg border border-border bg-surface/60 p-3">
-                  <span className="block truncate font-mono text-xs text-muted-foreground">
-                    {inviteUrl || "Create the session on-chain to generate a shareable invite link."}
-                  </span>
+                  {inviteUrl ? (
+                    <div className="flex items-center gap-2.5">
+                      <LockKeyhole className="size-3.5 shrink-0 text-emerald-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[0.65rem] font-medium uppercase tracking-widest text-muted-foreground">Session Code</p>
+                        <p className="truncate font-mono text-xs text-foreground">{sessionId}</p>
+                      </div>
+                      <span className="size-2 shrink-0 rounded-full bg-emerald-400" />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Create the session on-chain to generate a shareable invite link.
+                    </p>
+                  )}
                   <Button variant="glass" size="sm" className="w-full" onClick={() => copyToClipboard(inviteUrl, "Share link")} disabled={!inviteUrl}>
-                    <Copy className="size-4" /> Copy share link
+                    <Copy className="size-4" /> Copy invite link
                   </Button>
                 </div>
 

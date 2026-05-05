@@ -1,6 +1,7 @@
 import { PublicKey, type Connection } from "@solana/web3.js";
 
 import { solanaConnection } from "@/lib/solana";
+import { LOCAL_TOKEN_REGISTRY } from "@/lib/token-registry";
 
 export const assetCatalog = [
   { label: "SPL Tokens", value: "tokens" },
@@ -345,6 +346,7 @@ export const fetchAssetSnapshot = async (
   ]);
 
   const labelsByAssetId = {
+    ...LOCAL_TOKEN_REGISTRY,
     ...(tokenLabelResult.status === "fulfilled" ? tokenLabelResult.value : {}),
     ...(nftLabelResult.status === "fulfilled" ? nftLabelResult.value : {}),
     ...(daoLabelResult.status === "fulfilled" ? daoLabelResult.value : {}),
