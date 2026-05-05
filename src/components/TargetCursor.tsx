@@ -105,7 +105,7 @@ const TargetCursor = ({
   }, [hideDefaultCursor, hoverDuration, parallaxOn, spinDuration, targetSelector]);
 
   return (
-    <div ref={cursorRef} className="target-cursor pointer-events-none fixed left-0 top-0 z-[9999] hidden size-10 md:block" aria-hidden="true">
+    <div ref={cursorRef} className="target-cursor pointer-events-none fixed left-0 top-0 z-[9999] hidden size-10 opacity-0 md:block" aria-hidden="true">
       <span className="target-cursor__corner target-cursor__corner--tl" />
       <span className="target-cursor__corner target-cursor__corner--tr" />
       <span className="target-cursor__corner target-cursor__corner--br" />
