@@ -118,11 +118,6 @@ All colors MUST be HSL.
     font-family: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
   }
 
-  .target-cursor-active,
-  .target-cursor-active * {
-    cursor: none !important;
-  }
-
   html {
     scroll-behavior: smooth;
   }
@@ -173,24 +168,5 @@ All colors MUST be HSL.
     text-wrap: balance;
   }
 
-  .target-cursor__corner {
-    @apply absolute size-3 border-primary;
-    filter: drop-shadow(0 0 10px hsl(var(--primary) / 0.9));
-  }
 
-  .target-cursor__corner--tl {
-    @apply left-0 top-0 border-l-2 border-t-2;
-  }
-
-  .target-cursor__corner--tr {
-    @apply right-0 top-0 border-r-2 border-t-2;
-  }
-
-  .target-cursor__corner--br {
-    @apply bottom-0 right-0 border-b-2 border-r-2;
-  }
-
-  .target-cursor__corner--bl {
-    @apply bottom-0 left-0 border-b-2 border-l-2;
-  }
 }
